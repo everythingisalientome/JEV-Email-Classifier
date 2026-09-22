@@ -1,0 +1,355 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Jev email classification</title>
+<style>
+:root{--bg:#F1F3EC;--ink:#1B2A1E;--muted:#5C6B5F;--green:#1F8A4C;--green-soft:#DDEFE2;--amber:#B8730A;--red:#C43E2C;
+      --pane:#1E1F22;--pane-2:#26282C;--pane-line:#3A3D43;--pane-text:#E9EAE6;--pane-muted:#9DA3A8;--card:#E6E9E1;--line:#D3D8CE;
+      --sans:"Helvetica Neue",Helvetica,Arial,sans-serif;--mono:"SF Mono",Menlo,Consolas,monospace}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);padding:30px 44px 24px}
+header{display:flex;align-items:center;justify-content:space-between}
+.brand{font-size:22px}.brand b{font-weight:700}.brand span{color:var(--muted);margin:0 8px}
+.pill{background:var(--green-soft);color:var(--green);font-size:12px;letter-spacing:.08em;font-weight:700;padding:8px 14px;border-radius:20px;text-transform:uppercase}
+h1{font-size:46px;margin:22px 0 6px;letter-spacing:-.5px}.num{font-variant-numeric:tabular-nums}
+.sub{color:var(--muted);font-size:18px;margin:0 0 18px}
+.tabs{display:flex;gap:4px;border-bottom:2px solid var(--ink);margin-bottom:22px}
+.tabs button{font:inherit;font-size:15px;font-weight:600;background:none;border:0;padding:10px 18px;cursor:pointer;color:var(--muted);border-bottom:3px solid transparent;margin-bottom:-2px}
+.tabs button.on{color:var(--ink);border-bottom-color:var(--ink)}
+.tab{display:none}.tab.on{display:block}
+code,pre{font-family:var(--mono)}
+
+/* ---------- tab 1: the two prompts ---------- */
+.compare{display:grid;grid-template-columns:1fr 1fr;gap:28px;align-items:start}
+.col h2{font-size:22px;margin:0 0 4px}.col .cap{color:var(--muted);font-size:15px;margin:0 0 14px}
+.promptbox{background:var(--pane);color:var(--pane-text);border-radius:12px;padding:22px 24px;font-family:var(--mono);font-size:13px;line-height:1.55;white-space:pre-wrap;box-shadow:0 14px 40px rgba(0,0,0,.18);min-height:560px}
+.promptbox .c{color:var(--pane-muted)}.promptbox .hl{color:#F0C36A}
+.qcards{display:flex;flex-direction:column;gap:12px}
+.q{background:#fff;border:1px solid var(--line);border-radius:10px;padding:14px 16px}
+.q .h{display:flex;align-items:center;gap:10px;margin-bottom:6px}
+.q .name{font-family:var(--mono);font-weight:700;font-size:15px}
+.q .type{font-size:11px;letter-spacing:.08em;font-weight:700;text-transform:uppercase;padding:3px 8px;border-radius:4px;color:#fff}
+.type.choice{background:var(--ink)}.type.score{background:#4A5D8F}.type.noul{background:var(--green)}
+.q .ins{font-size:15px;margin-bottom:8px}
+.q .crit{display:grid;grid-template-columns:110px 1fr;gap:3px 12px;font-size:13px}
+.q .crit b{font-family:var(--mono);font-weight:600}.q .crit span{color:var(--muted)}
+.q .crit.ordered b{color:#4A5D8F}
+.q .none{font-size:13px;color:var(--muted)}
+.diff{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-top:26px}
+.diff div{background:var(--card);border-radius:10px;padding:16px 18px;font-size:14.5px;line-height:1.45}
+.diff b{display:block;margin-bottom:4px}
+
+/* ---------- tab 2: execution ---------- */
+.layout{display:grid;grid-template-columns:1fr 340px;gap:36px;align-items:start}
+.pane{background:var(--pane);color:var(--pane-text);border-radius:12px;box-shadow:0 14px 40px rgba(0,0,0,.18);overflow:hidden;height:760px;display:flex;flex-direction:column}
+.chrome{display:flex;align-items:center;gap:8px;padding:12px 16px;border-bottom:1px solid var(--pane-line);background:#18191B}
+.chrome i{width:12px;height:12px;border-radius:50%;display:inline-block}
+.chrome .url{margin-left:14px;font-family:var(--mono);font-size:13px;color:var(--pane-muted)}
+.chrome .bar{margin-left:auto;height:3px;width:220px;background:#333;border-radius:2px;overflow:hidden}
+.chrome .bar i{display:block;height:100%;width:0;border-radius:0;background:#6FB0FF;transition:width .3s}
+.grid{flex:1;overflow:auto;font-size:13.5px}
+table{border-collapse:collapse;width:100%}
+th{position:sticky;top:0;background:#18191B;color:var(--pane-muted);font-size:11px;letter-spacing:.06em;text-transform:uppercase;text-align:left;padding:10px 12px;border-bottom:1px solid var(--pane-line);font-weight:600;z-index:1}
+td{padding:9px 12px;border-bottom:1px solid #26282C;vertical-align:middle;white-space:nowrap}
+td.subj{white-space:normal;max-width:300px}
+tr.wait td{color:var(--pane-muted)}tr.wait td.subj{color:var(--pane-text)}
+tr.new{animation:land .5s ease;cursor:pointer}
+@keyframes land{from{background:#2E3A31}to{background:transparent}}
+tr.open{background:#232529}
+tr.detail td{white-space:normal;background:#1A1B1E;padding:14px 18px 18px;border-bottom:1px solid var(--pane-line)}
+.dept{font-family:var(--mono);color:#8FD3A8;font-weight:600}
+.conf{display:flex;align-items:center;gap:8px;font-family:var(--mono)}
+.conf i{display:inline-block;width:56px;height:6px;background:#333;border-radius:3px;overflow:hidden}
+.conf i b{display:block;height:100%;background:#8FD3A8}
+.conf.low i b{background:#F0C36A}.conf.vlow i b{background:#F5A796}
+.urg{font-family:var(--mono);font-size:12px;color:var(--pane-muted)}.urg.u3{color:#F5A796}.urg.u2{color:#F0C36A}
+.flag{display:inline-block;font-family:var(--mono);font-size:10.5px;font-weight:700;letter-spacing:.05em;padding:2px 6px;border-radius:3px;margin-right:4px;background:#3A2320;color:#F5A796;border:1px solid #7A3B31}
+.act{font-family:var(--mono);font-size:11px;font-weight:700;letter-spacing:.06em;padding:3px 8px;border-radius:4px;color:#fff}
+.act.AUTO{background:var(--green)}.act.VERIFY{background:var(--amber)}.act.HUMAN{background:var(--red)}
+.ms{font-family:var(--mono);text-align:right;color:var(--pane-muted)}
+.spin{display:inline-block;width:10px;height:10px;border:2px solid #555;border-top-color:#6FB0FF;border-radius:50%;animation:sp .8s linear infinite;vertical-align:middle}
+@keyframes sp{to{transform:rotate(360deg)}}
+.d-meta{font-family:var(--mono);font-size:12px;color:var(--pane-muted);margin-bottom:6px}
+.d-body{color:#D5D7D2;line-height:1.5;max-width:760px;margin-bottom:12px;white-space:pre-wrap}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px}
+.chip{border:1px solid var(--pane-line);background:var(--pane-2);border-radius:6px;padding:5px 9px;font-size:12.5px;display:flex;gap:7px}
+.chip .k{color:var(--pane-muted);font-family:var(--mono);font-size:11px}.chip .p{font-family:var(--mono);font-size:11px;color:#8FD3A8}
+.chip.flagged{border-color:#7A3B31;background:#3A2320}.chip.flagged .p{color:#F5A796}
+.d-why{font-size:13px;color:var(--pane-muted)}.d-why b{color:var(--pane-text);font-weight:600}
+.empty{padding:60px 24px;text-align:center;color:var(--pane-muted)}
+
+.side .label{color:var(--green);font-size:13px;letter-spacing:.12em;font-weight:700;text-transform:uppercase;margin-bottom:4px}
+.big{font-family:var(--mono);font-size:56px;font-weight:600;letter-spacing:-1px;line-height:1;font-variant-numeric:tabular-nums}
+.cap{font-size:12px;letter-spacing:.1em;color:var(--muted);text-transform:uppercase;margin:6px 0 22px}
+.status{background:var(--card);border-radius:12px;padding:18px 22px;margin-bottom:22px}
+.status b{display:block;font-size:19px;margin-bottom:4px}.status span{color:var(--muted);font-size:14px}
+.stats{display:grid;grid-template-columns:1fr 1fr;gap:16px 12px}
+.stat .n{font-family:var(--mono);font-size:30px;font-weight:600;font-variant-numeric:tabular-nums}
+.stat .l{font-size:13px;color:var(--muted);margin-top:2px}
+.policy{background:var(--card);border-radius:12px;padding:16px 18px;margin-top:22px}
+.policy .t{font-size:13px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-bottom:10px}
+.bands{display:flex;height:10px;border-radius:5px;overflow:hidden;background:#D9DED4;margin:8px 0 6px}
+.bands i{display:block;height:100%;transition:width .3s}
+.bands .AUTO{background:var(--green)}.bands .VERIFY{background:var(--amber)}.bands .HUMAN{background:var(--red)}
+.bandlab{display:flex;justify-content:space-between;font-size:13px;color:var(--muted)}.bandlab b{color:var(--ink);font-family:var(--mono)}
+.policy label{display:flex;align-items:center;gap:10px;font-size:14px;margin:6px 0}
+.policy input[type=range]{flex:1;accent-color:var(--ink)}.policy .v{font-family:var(--mono);width:38px;text-align:right}
+.policy .note{font-size:12.5px;color:var(--muted);margin-top:8px;line-height:1.4}
+.cmp{background:var(--card);border-radius:12px;padding:16px 18px;margin-top:22px}
+.cmp .t{font-size:13px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-bottom:10px}
+.cmp .row{display:grid;grid-template-columns:1fr auto 48px;gap:8px;align-items:baseline;padding:6px 0;border-bottom:1px solid #D3D8CE;font-size:14px}
+.cmp .row.head{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);border-bottom:1px solid var(--ink);padding-bottom:4px}
+.cmp .row:last-of-type{border-bottom:0}
+.cmp .row.jev{font-weight:700}
+.cmp .c{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.cmp .x{font-family:var(--mono);font-size:12px;color:var(--red);text-align:right}
+.cmp .row.jev .x{color:var(--green)}
+.cmp .note{font-size:12px;color:var(--muted);margin-top:8px;line-height:1.4}
+.controls{display:flex;gap:10px;align-items:center;margin-top:20px}
+button.primary{font:inherit;font-weight:600;background:var(--ink);color:#fff;border:0;border-radius:8px;padding:10px 18px;cursor:pointer}
+button.primary[disabled]{opacity:.45;cursor:default}
+select{font:inherit;padding:9px 10px;border-radius:8px;border:1px solid #C5CDC5;background:#fff}
+footer{display:flex;justify-content:space-between;color:var(--muted);font-size:13px;margin-top:22px;padding-top:12px;border-top:2px solid var(--ink)}
+@media(max-width:900px){.layout,.compare,.diff{grid-template-columns:1fr}body{padding:20px}h1{font-size:32px}.pane{height:auto;min-height:500px}}
+</style>
+</head>
+<body>
+<header>
+  <div class="brand"><b>jev</b><span>×</span>email classification</div>
+  <div class="pill" id="pill">Ready</div>
+</header>
+
+<h1><span class="num" id="hCount">0</span> emails. In <span class="num" id="hTime">0.0</span> seconds.</h1>
+<p class="sub">One request per email. Six typed questions. No text generated, nothing parsed.</p>
+
+<div class="tabs">
+  <button class="on" data-tab="ask">1 · What we ask</button>
+  <button data-tab="run">2 · Run</button>
+</div>
+
+<!-- ============================ TAB 1 ============================ -->
+<section class="tab on" id="tab-ask">
+  <div class="compare">
+    <div class="col">
+      <h2>The LLM way</h2>
+      <p class="cap">One prompt. Instructions, definitions, output format and hopes, all in prose.</p>
+      <div class="promptbox" id="llmPrompt"></div>
+    </div>
+    <div class="col">
+      <h2>The Jev way</h2>
+      <p class="cap">No prompt. The email is the state; each field is a typed question with a fixed answer space.</p>
+      <div class="qcards" id="qcards"></div>
+    </div>
+  </div>
+  <div class="diff">
+    <div><b>Output</b>LLM: a string we parse, validate and retry. Jev: a value from the schema, by construction.</div>
+    <div><b>Confidence</b>LLM: a number it chose to write. Jev: a probability the model computed, trained to be calibrated.</div>
+    <div><b>Tuning</b>LLM: rewrite the prompt. Jev: sharpen one criteria description. Policy stays in code either way.</div>
+  </div>
+</section>
+
+<!-- ============================ TAB 2 ============================ -->
+<section class="tab" id="tab-run">
+<div class="layout">
+  <div class="pane">
+    <div class="chrome"><i style="background:#FF5F57"></i><i style="background:#FEBC2E"></i><i style="background:#28C840"></i>
+      <span class="url" id="url">inbox / waiting</span><span class="bar"><i id="bar"></i></span></div>
+    <div class="grid" id="grid">
+      <table>
+        <thead><tr><th>#</th><th>subject</th><th>department</th><th>dept conf</th><th>urgency</th><th>flags</th><th>action</th><th style="text-align:right">ms</th></tr></thead>
+        <tbody id="rows"></tbody>
+      </table>
+      <div class="empty" id="empty">Press Start. Each email lands here as Jev answers; click a row to see the full email and every decision.</div>
+    </div>
+  </div>
+
+  <aside class="side">
+    <div class="label" id="modelLabel">Jev</div>
+    <div class="big" id="clock">00.00</div>
+    <div class="cap">seconds elapsed</div>
+
+    <div class="status"><b id="sTitle">Idle</b><span id="sText">Emails load from emails.jsonl</span></div>
+
+    <div class="stats">
+      <div class="stat"><div class="n" id="stCount">0</div><div class="l">emails classified</div></div>
+      <div class="stat"><div class="n" id="stTime">0.0s</div><div class="l">total time</div></div>
+      <div class="stat"><div class="n" id="stCost">$0.0000</div><div class="l">total cost</div></div>
+      <div class="stat"><div class="n" id="stMs">— ms</div><div class="l">median decision latency</div></div>
+    </div>
+
+    <div class="cmp">
+      <div class="t">Same run on a chat LLM · approximate cost</div>
+      <div id="cmpRows"></div>
+      <div class="note" id="cmpNote">Chat-model costs are estimates, not measured.</div>
+    </div>
+
+    <div class="policy">
+      <div class="t">Routing outcome</div>
+      <div class="bands"><i class="AUTO" id="bAuto"></i><i class="VERIFY" id="bVerify"></i><i class="HUMAN" id="bHuman"></i></div>
+      <div class="bandlab"><span><b id="nAuto">0</b> auto</span><span><b id="nVerify">0</b> verify</span><span><b id="nHuman">0</b> human</span></div>
+      <div class="t" style="margin-top:16px">Policy (in code, not in the model)</div>
+      <label>Auto-route at ≥ <input type="range" id="thAuto" min="0.5" max="0.99" step="0.01" value="0.90"><span class="v" id="thAutoV">0.90</span></label>
+      <label>Verify at ≥ <input type="range" id="thReview" min="0.5" max="0.99" step="0.01" value="0.75"><span class="v" id="thReviewV">0.75</span></label>
+      <div class="note">Measured on department confidence. Phishing and PII always go to a person; complaints outside the complaints queue always get verified.</div>
+    </div>
+
+    <div class="controls">
+      <button class="primary" id="start">Start</button>
+      <select id="limit"><option value="10">10 emails</option><option value="0" selected>All emails</option></select>
+    </div>
+  </aside>
+</div>
+</section>
+
+<footer><span id="foot">Decisions by Jev. Original timing; network waits included. Cost = input tokens × list price, output is free.</span><span id="tok">0 input tokens</span></footer>
+
+<script>
+const $ = id => document.getElementById(id);
+let es, t0, timer, schema = null, rowsById = {}, total = 0;
+const URG_SHORT = ['none', 'this week', '1 business day', 'same day'];
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+/* ---------- tabs ---------- */
+document.querySelectorAll('.tabs button').forEach(b => b.onclick = () => {
+  document.querySelectorAll('.tabs button').forEach(x => x.classList.toggle('on', x === b));
+  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('on', t.id === 'tab-' + b.dataset.tab));
+});
+
+/* ---------- tab 1: render both prompts from the same schema ---------- */
+function llmPromptFrom(q){
+  const d = q.department, u = q.urgency;
+  let s = `<span class="c"># system</span>\nYou are an email triage assistant for a retail bank. Read the customer email and classify it.\n\n`;
+  s += `Department must be exactly one of: ${Object.keys(d.criteria).join(', ')}.\n`;
+  for (const [k, v] of Object.entries(d.criteria)) s += `- ${k}: ${v}\n`;
+  s += `\nUrgency is an integer 0-3:\n`; u.criteria.forEach((c, i) => s += `- ${i}: ${c}\n`);
+  for (const k of ['needs_reply', 'is_complaint', 'has_pii', 'is_phishing']) s += `\n${k} (true/false): ${q[k].instructions}`;
+  s += `\n\nFor each field also give a confidence between 0 and 1.\n\n`;
+  s += `<span class="hl">Respond ONLY with valid JSON in this exact shape, no prose, no markdown, no explanation:\n{"department": "...", "urgency": 0, "needs_reply": true, "is_complaint": false, "has_pii": false, "is_phishing": false, "confidence": {...}}</span>\n\n`;
+  s += `<span class="c"># user</span>\n{email}\n\n<span class="c"># then, in our code\n# parse JSON → validate fields → retry on failure → trust the confidence it wrote</span>`;
+  return s;
+}
+function qcardsFrom(q){
+  return Object.entries(q).map(([name, spec]) => {
+    let crit = '';
+    if (spec.type === 'choice') crit = `<div class="crit">${Object.entries(spec.criteria).map(([k, v]) => `<b>${k}</b><span>${v}</span>`).join('')}</div>`;
+    else if (spec.type === 'score') crit = `<div class="crit ordered">${spec.criteria.map((c, i) => `<b>${i}</b><span>${c}</span>`).join('')}</div>`;
+    else crit = `<div class="none">answer: P(true), a single probability</div>`;
+    return `<div class="q"><div class="h"><span class="name">${name}</span><span class="type ${spec.type}">${spec.type}</span></div><div class="ins">${spec.instructions}</div>${crit}</div>`;
+  }).join('');
+}
+
+const FALLBACK_SCHEMA = {"questions": {"department": {"type": "choice", "instructions": "Which team should own this email?", "criteria": {"cards": "Debit or credit cards: delivery, activation, declines, lost or stolen, ATM problems, wallet setup", "payments": "Transfers, wires, direct deposits, bill pay, pending or missing payments, refunds not received", "disputes": "Charges the customer does not recognise, duplicate charges, fees they believe are wrong", "fraud": "Suspected fraud, identity theft, account takeover, phishing, request to freeze access", "digital": "Online banking login, password reset, mobile app errors, account merging", "servicing": "Address or profile changes, statements, letters, limits, closing accounts, product questions, rates", "complaints": "Dissatisfaction with service, staff or branches that needs escalation rather than a fix", "not_customer": "Vendor invoices, legal notices, marketing, newsletters, business partnerships, system notifications"}}, "urgency": {"type": "score", "instructions": "How quickly does this need a response?", "criteria": ["No response needed", "Within a week", "Within one business day", "Same day, money or security at risk"]}, "needs_reply": {"type": "noul", "instructions": "Does the sender expect a written reply from the bank?"}, "is_complaint": {"type": "noul", "instructions": "Is the sender expressing dissatisfaction with the bank's service?"}, "has_pii": {"type": "noul", "instructions": "Does the email contain sensitive identifiers such as a social security number, full card number or password?"}, "is_phishing": {"type": "noul", "instructions": "Is this email itself a phishing or scam attempt directed at the reader?"}}, "model": "typesafe/jev-1.13", "provider": "openrouter", "price_per_m_input": 0.042, "auto_threshold": 0.9, "review_threshold": 0.75};
+function applySchema(s){
+  schema = s;
+  $('llmPrompt').innerHTML = s.llm_prompt
+    ? `<span class="c"># system</span>\n${esc(s.llm_prompt).replace(/Respond ONLY[\s\S]*$/, m => `<span class="hl">${m}</span>`)}\n\n<span class="c"># user</span>\n{email}\n\n<span class="c"># then, in our code\n# parse JSON → validate fields → retry on failure → trust the confidence it wrote</span>`
+    : llmPromptFrom(s.questions);
+  if (s.compare_models) {
+    $('cmpRows').innerHTML = `<div class="row jev"><span>Jev (measured)</span><span class="c" id="cmpJev">$0.0000</span><span class="x">1×</span></div>` +
+      s.compare_models.map(m => `<div class="row"><span>${esc(m.name)}</span><span class="c" id="cmp-${esc(m.name)}">≈ $0.0000</span><span class="x" id="cmpx-${esc(m.name)}"></span></div>`).join('');
+    $('cmpNote').textContent = `≈ rows are estimates, not measured: ~${s.llm_prompt_tokens} prompt tokens + each email in, ~${s.llm_output_tokens} tokens of JSON out, at OpenRouter list prices (${s.compare_models.map(m => `${m.name} $${m.in}/$${m.out} per M`).join('; ')}). Time is not compared; it varies by org and setup.`;
+  }
+  $('qcards').innerHTML = qcardsFrom(s.questions);
+  $('modelLabel').textContent = s.provider === 'mock' ? 'Jev (mock mode)' : s.model;
+  $('foot').textContent = (s.provider === 'mock' ? 'Mock answers, no API calls. ' : `Decisions by ${s.model} via ${s.provider}. `) +
+    `Original timing; network waits included. Cost = input tokens × $${s.price_per_m_input}/M, output is free.`;
+  $('thAuto').value = s.auto_threshold; $('thReview').value = s.review_threshold; syncTh();
+}
+applySchema(FALLBACK_SCHEMA);
+fetch('/schema').then(r => r.json()).then(applySchema).catch(() => {});
+
+/* ---------- policy sliders ---------- */
+function syncTh(){
+  if (+$('thReview').value > +$('thAuto').value) $('thReview').value = $('thAuto').value;
+  $('thAutoV').textContent = (+$('thAuto').value).toFixed(2); $('thReviewV').textContent = (+$('thReview').value).toFixed(2);
+}
+$('thAuto').oninput = syncTh; $('thReview').oninput = syncTh;
+
+/* ---------- tab 2: grid ---------- */
+function fmtClock(s){ return s < 60 ? s.toFixed(2).padStart(5,'0') : Math.floor(s/60)+':'+(s%60).toFixed(1).padStart(4,'0'); }
+function tick(){ const s = (performance.now() - t0)/1000; $('clock').textContent = fmtClock(s); $('hTime').textContent = s.toFixed(1); }
+
+function addWaitingRow(e){
+  $('empty').style.display = 'none';
+  const tr = document.createElement('tr'); tr.className = 'wait'; tr.dataset.id = e.id;
+  tr.innerHTML = `<td>${e.id}</td><td class="subj">${esc(e.subject)}</td><td><span class="spin"></span></td><td></td><td></td><td></td><td></td><td class="ms"></td>`;
+  $('rows').appendChild(tr); rowsById[e.id] = {tr, email: e};
+  tr.scrollIntoView({block: 'nearest'});
+}
+
+function fillRow(r){
+  const rec = rowsById[r.id]; if (!rec) return; rec.result = r;
+  const a = r.answers || {}, d = a.department || {}, u = a.urgency || {}, dec = r.decision || {};
+  const p = d.p, cls = p == null ? '' : p < +$('thReview').value ? 'vlow' : p < +$('thAuto').value ? 'low' : '';
+  const ui = schema ? schema.questions.urgency.criteria.indexOf(u.value) : -1;
+  const flags = ['is_phishing','has_pii','is_complaint'].filter(k => a[k] && a[k].value === true)
+    .map(k => `<span class="flag">${{is_phishing:'PHISH', has_pii:'PII', is_complaint:'CMPL'}[k]}</span>`).join('');
+  rec.tr.className = 'new';
+  rec.tr.innerHTML = `<td>${r.id}</td><td class="subj">${esc(rec.email.subject)}</td>
+    <td class="dept">${r.error ? 'error' : esc(dec.route)}${r.expected && r.expected !== d.value ? ` <span class="flag" title="expected ${esc(r.expected)}">≠ ${esc(r.expected)}</span>` : ''}</td>
+    <td><span class="conf ${cls}"><i><b style="width:${p == null ? 0 : p*100}%"></b></i>${p == null ? '—' : p.toFixed(2)}</span></td>
+    <td><span class="urg u${ui}">${ui >= 0 ? URG_SHORT[ui] : esc(u.value ?? '')}</span></td>
+    <td>${flags}</td><td><span class="act ${dec.action}">${dec.action || ''}</span></td><td class="ms">${r.latency_ms}</td>`;
+  rec.tr.onclick = () => toggleDetail(r.id);
+  rec.tr.scrollIntoView({block: 'nearest'});
+
+  const t = r.totals, ac = t.actions, tot = ac.AUTO + ac.VERIFY + ac.HUMAN || 1;
+  $('stCount').textContent = t.classified; $('hCount').textContent = t.classified;
+  $('stTime').textContent = t.elapsed_s.toFixed(1) + 's'; $('stCost').textContent = '$' + t.cost_usd.toFixed(4);
+  $('stMs').textContent = t.median_ms + ' ms'; $('tok').textContent = t.tokens.toLocaleString() + ' input tokens';
+  $('bAuto').style.width = 100*ac.AUTO/tot + '%'; $('bVerify').style.width = 100*ac.VERIFY/tot + '%'; $('bHuman').style.width = 100*ac.HUMAN/tot + '%';
+  $('nAuto').textContent = ac.AUTO; $('nVerify').textContent = ac.VERIFY; $('nHuman').textContent = ac.HUMAN;
+  if (t.llm_cost_usd) {
+    $('cmpJev').textContent = '$' + t.cost_usd.toFixed(4);
+    for (const [name, c] of Object.entries(t.llm_cost_usd)) {
+      const el = $('cmp-' + name), x = $('cmpx-' + name);
+      if (el) el.textContent = '≈ $' + c.toFixed(4);
+      if (x) x.textContent = t.cost_usd > 0 ? (c / t.cost_usd).toFixed(0) + '×' : '';
+    }
+  }
+  $('sTitle').textContent = r.error ? 'Request failed' : `Classified in ${r.latency_ms} ms`;
+  $('sText').textContent = r.error ? r.error.slice(0, 120) : `${dec.action}: ${dec.reason}`;
+  $('bar').style.width = (100 * t.classified / total) + '%';
+}
+
+function toggleDetail(id){
+  const rec = rowsById[id]; const next = rec.tr.nextElementSibling;
+  if (next && next.classList.contains('detail')) { next.remove(); rec.tr.classList.remove('open'); return; }
+  document.querySelectorAll('tr.detail').forEach(x => x.remove()); document.querySelectorAll('tr.open').forEach(x => x.classList.remove('open'));
+  const r = rec.result, a = r.answers || {}, e = rec.email, dec = r.decision || {};
+  const chips = Object.entries(a).map(([k, v]) => {
+    const flagged = (k === 'has_pii' || k === 'is_phishing' || k === 'is_complaint') && v.value === true;
+    const shown = typeof v.value === 'boolean' ? (v.value ? 'yes' : 'no') : esc(v.value);
+    return `<span class="chip${flagged ? ' flagged' : ''}"><span class="k">${k}</span><span>${shown}</span>${v.p == null ? '' : `<span class="p">${v.p.toFixed(2)}</span>`}</span>`;
+  }).join('');
+  const tr = document.createElement('tr'); tr.className = 'detail';
+  tr.innerHTML = `<td colspan="8"><div class="d-meta">from ${esc(e.from)} · ${r.input_tokens} input tokens</div><div class="d-body">${esc(e.body)}</div>
+    <div class="chips">${chips}</div><div class="d-why"><b>${dec.action}</b> · ${esc(dec.reason)}${r.expected ? ` · expected <b style="color:${r.expected === (a.department||{}).value ? '#8FD3A8' : '#F5A796'}">${esc(r.expected)}</b>` : ''}</div></td>`;
+  rec.tr.after(tr); rec.tr.classList.add('open');
+}
+
+/* ---------- run ---------- */
+$('start').onclick = () => {
+  if (es) es.close();
+  $('start').disabled = true; $('pill').textContent = 'Live · 1× speed';
+  $('rows').innerHTML = ''; rowsById = {}; $('empty').style.display = 'none';
+  t0 = performance.now(); timer = setInterval(tick, 50);
+  const lim = $('limit').value === '0' ? '' : '&limit=' + $('limit').value;
+  es = new EventSource(`/stream?auto=${$('thAuto').value}&review=${$('thReview').value}${lim}`);
+  es.addEventListener('start', e => { total = JSON.parse(e.data).total; $('url').textContent = 'inbox / running'; $('sTitle').textContent = 'Waiting for Jev…'; $('sText').textContent = 'Six questions, one parallel pass'; });
+  es.addEventListener('email', e => addWaitingRow(JSON.parse(e.data)));
+  es.addEventListener('result', e => fillRow(JSON.parse(e.data)));
+  es.addEventListener('done', e => {
+    const d = JSON.parse(e.data); clearInterval(timer); es.close(); es = null;
+    $('clock').textContent = fmtClock(d.elapsed_s); $('hTime').textContent = d.elapsed_s.toFixed(1);
+    $('pill').textContent = 'Done'; $('sTitle').textContent = 'Inbox cleared';
+    $('sText').textContent = `${d.classified} emails, $${d.cost_usd.toFixed(4)} · ${d.actions.AUTO} handled without a person`;
+    $('url').textContent = 'inbox / done'; $('start').disabled = false; $('start').textContent = 'Run again';
+  });
+  es.onerror = () => { clearInterval(timer); $('pill').textContent = 'Connection lost'; $('start').disabled = false; if (es) { es.close(); es = null; } };
+};
+</script>
+</body>
+</html>
